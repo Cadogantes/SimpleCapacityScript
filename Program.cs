@@ -263,7 +263,7 @@ public string BuildInfoStringTopMass(int positions) //builds a string with top {
     string result = $"Top {displayedItems} " + (string)(displayedItems == 1 ? "item" : "items") + " in cargo:";
     for (int i = 0; i < displayedItems; i++)
     {
-        result += "\n" + String.Format("{0:#,##0}", sortedItemsInCargo[i].Amount) + " " + sortedItemsInCargo[i].Type.SubtypeId;
+        result += "\n" + sortedItemsInCargo[i].Type.SubtypeId + " – " + String.Format("{0:#,##0}", sortedItemsInCargo[i].Amount);
     }
     Echo(result);
 
