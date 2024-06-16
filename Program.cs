@@ -1,7 +1,7 @@
-﻿//------------------------------------ Instructions ------------------------------------//
+//------------------------------------ Instructions ------------------------------------//
 //================================================//
 //This script will allow you to display current cargo capacity in your ship's cockpit. To use it follow this steps:
-//1) Build Programmable Block on your ship
+//1) Install Programmable Block on your ship
 //2) Change the "cockpitName" and "cockpitScreen" variables in the config section of the script, a bit below
 //3) Copy the whole script after changes (if you didn't get the script in game)
 //4) While on the ship - go to Control Panel, select Programmable Block, click "Edit" button, paste the script there, click "OK", click "Run"
@@ -10,10 +10,12 @@
 
 //------------------------------------ Config ------------------------------------//
 //================================================//
-readonly string cockpitName = "Flight Seat"; //name of your Cockpit block
+readonly string cockpitName = "Cockpit"; //name of your Cockpit block
 readonly int cockpitScreen = 0; //indexed from 0, changes the screen on which capacity info will be displayed. Try values from 0 to 4 to identify which scren is the one you want.
 readonly int barLength = 50; //how long the indicator bar is
 readonly int topPositions = 3; //how many top items in cargo would you like to see displayed
+
+readonly bool debug = false;
 //-------------------------------- End of Config --------------------------------//
 //================================================//
 
@@ -70,7 +72,7 @@ public string CreateProgressBar(int fillPercentage)
     string createdBar = barStart;  //start building result string
 
     int filledBars = (int)(barLength * ((float)fillPercentage / 100));
-    //Echo($"fillPercentage: {fillPercentage}, filledBars: {filledBars}");
+    DebugEcho($"fillPercentage: {fillPercentage}, filledBars: {filledBars}");
     int emtyBars = barLength - filledBars;
 
     //start by adding full bars to the string - add filledBars of them
@@ -244,14 +246,14 @@ public string BuildInfoStringTopMass(int positions) //builds a string with top {
 
     //get items in cargo
     itemsInCargo.AddRange(GetItemsInBlocks(allBlocksWithCargo));
-    //Echo("All inventory items count: " + allBlocksWithCargo.Count);
+    DebugEcho("All inventory items count: " + allBlocksWithCargo.Count);
 
     //merge elements of inventory list by type to get single stacks of every item
     List<SimplifiedInventoryItem> simplifiedItemsInCargo = ConvertToSimplifiedInventory(itemsInCargo);
-    //Echo("Simplified items count: " + simplifiedItemsInCargo.Count);
+    DebugEcho("Simplified items count: " + simplifiedItemsInCargo.Count);
 
     simplifiedItemsInCargo = MergeItemsOfSameType(simplifiedItemsInCargo);
-    //Echo("Merged items count: " + simplifiedItemsInCargo.Count);
+    DebugEcho("Merged items count: " + simplifiedItemsInCargo.Count);
 
     //sort those items by their amount
     var sortedItemsInCargo = simplifiedItemsInCargo.OrderByDescending(x => x.Amount).ToList(); // I wanted to compare volumes to be in line with measuring cargo in volume, but it turns out to be problematic. Mass is the simplest workaround as it should be good enough to compare inventory
@@ -286,63 +288,19 @@ public List<MyInventoryItem> GetItemsInBlocks(List<IMyTerminalBlock> blocksWithI
 //merges list so that only one element of each type exists within
 public List<SimplifiedInventoryItem> MergeItemsOfSameType(List<SimplifiedInventoryItem> listToMerge)
 {
-    List<SimplifiedInventoryItem> mergedList = new List<SimplifiedInventoryItem>(); //instantiate merged list
-    listToMerge = listToMerge.OrderBy(x => x.Type.SubtypeId).ToList(); //sort list to be sure items of the same type are grouped together
 
-    for (int i = 1; i < listToMerge.Count; i++)
-    {
-        if (listToMerge[i].Type.SubtypeId == listToMerge[i - 1].Type.SubtypeId) //if previous inventory item is of the same type that current one - merge those two
-        {
-            //Merge two items in the list into one position
-            SimplifiedInventoryItem mergedItem = listToMerge[i - 1];
-            mergedItem.Amount = listToMerge[i - 1].Amount + listToMerge[i].Amount;
-            mergedList.Add(mergedItem);
-            if (i < listToMerge.Count - 2) i++; //important to avoid double counting
-            else if (i == listToMerge.Count - 2 && listToMerge.Count > 2) //special rule for case when there is a pair of the same inventory as two out of free last pieces
-            {
-                mergedList.Add(listToMerge[i + 1]); //add last item in the list...
-                break; //but don't add the penultimate - it has already been merged
-            }
-        }
-        else
-        {
-            mergedList.Add(listToMerge[i - 1]); //if they are not the same type - add the previous item into the new list
-            if (i == listToMerge.Count - 1) mergedList.Add(listToMerge[i]); //if we are at the last item and the penultimate is of different type - add both to new list
-        }
-    }
+    // Group by Subtype and sum Amount
+    List<SimplifiedInventoryItem> mergedList = listToMerge
+            .GroupBy(item => item.Type.SubtypeId)
+            .Select(group => new SimplifiedInventoryItem
+            (
+                amount:group.Sum(item => item.Amount),
+                type:group.First().Type // Use the Type from the first item in the group
+            ))
+            .ToList();
 
-    ////debug - if you want to see how each step looks when merging inventory stacks
-    //Echo("");
-    //Echo($"Items in merged list: {mergedList.Count()}");
-    //foreach (SimplifiedInventoryItem item in mergedList)
-    //{
-
-    //    Echo($"{item.Type.SubtypeId} {item.Amount}");
-    //}
-
-    if (listToMerge.Count == mergedList.Count)
-    {
-        return mergedList;
-    }
-    else
-    {
-        return MergeItemsOfSameType(mergedList); //recurrency, yay!
-    }
+    return mergedList;
 }
-
-//cleaner version of merge method that uses LINQ. Somehow it produced strange not-quite-merged lists sometimes so ultimately I decided not to use it. It's much nicer though so if you can make it work - go for it
-//public List<SimplifiedInventoryItem> MergeItemsOfSameType(List<SimplifiedInventoryItem> listToMerge)
-//{
-
-//    // Group by Subtype and sum Amount
-//    List<SimplifiedInventoryItem> mergedList = listToMerge
-//        .GroupBy(item => item.Type)
-//        .Select(group => new SimplifiedInventoryItem(group.Key, group.Sum(item => item.Amount)))
-//        .ToList();
-
-//    return mergedList;
-//}
-
 
 //just for conveniance sake I add this method that converts MyInventoryItem list to a list of SimplifiedInventoryItem
 public List<SimplifiedInventoryItem> ConvertToSimplifiedInventory(List<MyInventoryItem> listToConvert)
@@ -387,5 +345,10 @@ public string BuildInfoStringCapacity()
     return capacityInfo + "\n"
         + capacityBar + "\n"
         + freeCapacity;
+}
+
+public void DebugEcho(string message)
+{
+    if (debug) Echo(message);
 }
 
